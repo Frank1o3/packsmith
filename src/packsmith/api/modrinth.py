@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import time
 from typing import Any
 
 from httpx import AsyncClient, Response
 from pydantic import BaseModel
+
+logger = logging.getLogger(__name__)
 
 
 class RateLimitState(BaseModel):
@@ -36,6 +39,16 @@ class ModrinthClient:
         resp = await self._client.get(path, params=params)
         self._update_rate_limit(resp)
         resp.raise_for_status()
+        logger.info(
+            """Request Limit %s
+\tRequest Remainder %s
+\tRequest Last Update %s
+\tRequest Reset After: %s""",
+            self.rate.limit,
+            self.rate.remaining,
+            self.rate.last_update,
+            self.rate.reset_after,
+        )
 
         return resp.json()
 

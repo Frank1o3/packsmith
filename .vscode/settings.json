@@ -20,5 +20,13 @@
   "python.testing.pytestArgs": [
     "tests"
   ],
-  "python.terminal.activateEnvironment": true
+  "python.terminal.activateEnvironment": true,
+  "files.exclude": {
+    "**/.git": true,
+    "**/.svn": true,
+    "**/.hg": true,
+    "**/.DS_Store": true,
+    "**/Thumbs.db": true,
+    "**/__pycache__": true
+  }
 }
