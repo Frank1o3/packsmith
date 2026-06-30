@@ -15,6 +15,7 @@ from packsmith.api import ModrinthClient
 from packsmith.cli.ui import console
 from packsmith.core.models import (
     ERROR_NOT_IN_PACK,
+    PROJECT_TYPE_TO_FIELD,
     Hit,
     LockFile,
     LockPackage,
@@ -33,9 +34,11 @@ if TYPE_CHECKING:
     from rich.console import Console
 
 
-async def search(name: str, project_type: ProjectType, loader: str) -> Search:
+async def search(
+    name: str, project_type: ProjectType, loader: str, game_version: str
+) -> Search:
     client = ModrinthClient(USER_AGENT)
-    return await client.search(name, project_type, loader)
+    return await client.search(name, project_type, loader, game_version)
 
 
 def load_lock(path: Path) -> LockFile:
@@ -101,14 +104,21 @@ def apply_add(
     lock: LockFile,
     hit: Hit,
 ) -> None:
-    if hit.title not in info.mods:
-        info.mods.append(hit.title)
+    field_name = PROJECT_TYPE_TO_FIELD.get(hit.project_type)
+
+    if field_name is None:
+        err = f"Unsupported project type: {hit.project_type}"
+        raise ValueError(err)
+
+    target_list: list[str] = getattr(info, field_name)
+
+    if hit.title not in target_list:
+        target_list.append(hit.title)
 
     if not has_package(lock, hit.project_id):
         lock.package.append(
             LockPackage(
-                name=hit.title,
-                project_id=hit.project_id,
+                name=hit.title, project_id=hit.project_id, project_type=hit.project_type
             )
         )
 
@@ -131,7 +141,7 @@ def add(name: str, project_type: ProjectType) -> None:
     info = Manifest.model_validate_json(register_file.read_text("utf-8"))
     lock = load_lock(lock_file)
 
-    search_res = asyncio.run(search(name, project_type, info.loader))
+    search_res = asyncio.run(search(name, project_type, info.loader, info.game_version))
     matched = search_res.match(name, project_type)
 
     hit = resolve_hit(matched, console)

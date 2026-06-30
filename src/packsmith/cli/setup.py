@@ -4,6 +4,7 @@
 
 from pathlib import Path
 
+from packsmith.cli.ui import console
 from packsmith.core.models import Manifest
 
 
@@ -35,3 +36,5 @@ def setup(pack_name: str, game_version: str, loader: str, loader_version: str) -
             shaderpacks=[],
         ).model_dump_json(indent=2)
     )
+    console.print(f"[green]Pack created at {path}[/green]")
+    console.print(f"[cyan]cd {path.name}[/cyan]")

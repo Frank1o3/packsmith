@@ -40,6 +40,11 @@ VersionType = Literal[
     "beta",
     "alpha",
 ]
+PROJECT_TYPE_TO_FIELD = {
+    "mod": "mods",
+    "resourcepack": "resourcepacks",
+    "shader": "shaderpacks",
+}
 
 
 def _normalize(text: str) -> str:
@@ -242,6 +247,7 @@ class ModPack(BaseAPIModel):
 class LockPackage(BaseModel):
     name: str
     project_id: str
+    project_type: ProjectType
     url: str | None = None
 
 

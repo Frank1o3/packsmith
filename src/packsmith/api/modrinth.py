@@ -63,7 +63,9 @@ class ModrinthClient:
 
         return resp.json()
 
-    async def search(self, name: str, project_type: ProjectType, loader: str) -> Search:
+    async def search(
+        self, name: str, project_type: ProjectType, loader: str, game_version: str
+    ) -> Search:
         params = {
             "query": name,
             "limit": 10,
@@ -71,6 +73,7 @@ class ModrinthClient:
             "facets": json.dumps([
                 [f"project_type:{project_type}"],
                 [f"categories:{loader}"],
+                [f"versions:{game_version}"],
             ]),
         }
         return Search.model_validate(await self.get("/search", params=params))
