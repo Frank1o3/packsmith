@@ -3,12 +3,30 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import logging
 import time
-from typing import Any
+from collections.abc import Mapping, Sequence
+from typing import TYPE_CHECKING, Any
 
-from httpx import AsyncClient, Response
+from httpx import AsyncClient, QueryParams, Response
 from pydantic import BaseModel
+
+from packsmith.core.models import ProjectVersion, ProjectVersions, Search
+
+if TYPE_CHECKING:
+    from packsmith.core.models import ProjectType
+
+PrimitiveData = str | int | float | bool | None
+
+QueryParamTypes = (
+    QueryParams
+    | Mapping[str, PrimitiveData | Sequence[PrimitiveData]]
+    | list[tuple[str, PrimitiveData]]
+    | tuple[tuple[str, PrimitiveData], ...]
+    | str
+    | bytes
+) | None
 
 logger = logging.getLogger(__name__)
 
@@ -31,26 +49,35 @@ class ModrinthClient:
         self._lock = asyncio.Lock()
 
     async def get(
-        self, path: str, params: dict[str, str] | None = None
-    ) -> dict[Any, Any]:
+        self,
+        path: str,
+        *,
+        params: QueryParamTypes = None,
+    ) -> Any:
         async with self._lock:
             await self._respect_rate_limit()
 
         resp = await self._client.get(path, params=params)
         self._update_rate_limit(resp)
         resp.raise_for_status()
-        logger.info(
-            """Request Limit %s
-\tRequest Remainder %s
-\tRequest Last Update %s
-\tRequest Reset After: %s""",
-            self.rate.limit,
-            self.rate.remaining,
-            self.rate.last_update,
-            self.rate.reset_after,
-        )
 
         return resp.json()
+
+    async def search(self, name: str, project_type: ProjectType, loader: str) -> Search:
+        params = {
+            "query": name,
+            "limit": 10,
+            "loaders": [loader],
+            "facets": json.dumps([
+                [f"project_type:{project_type}"],
+                [f"categories:{loader}"],
+            ]),
+        }
+        return Search.model_validate(await self.get("/search", params=params))
+
+    async def get_project_versions(self, project_id: str) -> list[ProjectVersion]:
+        endpoint = f"/project/{project_id}/version"
+        return ProjectVersions.validate_python(await self.get(endpoint))
 
     # ------------------------
     # rate limit logic
@@ -79,6 +106,9 @@ class ModrinthClient:
 
     async def close(self) -> None:
         await self._client.aclose()
+
+    async def __aexit__(self, *_: object) -> None:
+        await self.close()
 
     # ------------------------
     # Static methods

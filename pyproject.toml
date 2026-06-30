@@ -9,6 +9,8 @@ license = "MIT"
 dependencies = [
     "httpx>=0.28.1",
     "pydantic>=2.13.4",
+    "pyfiglet>=1.0.4",
+    "tomli-w>=1.2.0",
     "typer>=0.26.8",
 ]
 
@@ -51,7 +53,7 @@ dev = [
 ]
 
 [project.scripts]
-packsmith = "packsmith.cli:main"
+packsmith = "packsmith.main:main"
 
 [project.urls]
 Homepage = "https://github.com/Frank1o3/packsmith"
