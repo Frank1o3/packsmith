@@ -1,7 +1,6 @@
 # Copyright (c) 2026 Frank1o3
 # SPDX-License-Identifier: MIT
 
-
 from pathlib import Path
 
 from packsmith.cli.ui import console

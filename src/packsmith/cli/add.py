@@ -124,6 +124,10 @@ def apply_add(
 
 
 def resolve_hit(matched: MatchResults, console: Console) -> Hit | None:
+    if not matched.results:
+        console.print("[red]No matches found.[/red]")
+        raise typer.Exit(code=1)
+
     if matched.best and matched.best.score == MatchScore.EXACT:
         return matched.best.hit
 

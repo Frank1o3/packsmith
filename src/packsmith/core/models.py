@@ -62,7 +62,6 @@ class MatchScore(IntEnum):
     PREFIX = 70
     CONTAINS = 50
     FUZZY = 30
-    NOTHING = 0
 
 
 class BaseAPIModel(BaseModel):
@@ -93,7 +92,7 @@ class MatchResult(BaseModel):
 
 
 class MatchResults(BaseModel):
-    results: list[MatchResult] = Field(default_factory=list)
+    results: list[MatchResult] | None = Field(default_factory=list)
 
     @property
     def best(self) -> MatchResult | None:
@@ -114,14 +113,7 @@ class Search(BaseAPIModel):
         project_type: ProjectType,
     ) -> MatchResults:
         if not self.found:
-            return MatchResults(
-                results=[
-                    MatchResult(
-                        hit=Hit(),
-                        score=MatchScore.NOTHING,
-                    )
-                ]
-            )
+            return MatchResults()
         target = _normalize(name)
         acronym = _acronym(name)
 
@@ -130,7 +122,6 @@ class Search(BaseAPIModel):
         for hit in self.hits:
             if hit.project_type != project_type:
                 continue
-
             title = hit.normalized_title
             slug = hit.normalized_slug
 
