@@ -19,6 +19,13 @@ _STABILITY = {
     "alpha": 1,
 }
 
+
+class Stability(IntEnum):
+    RELEASE = 3
+    BETA = 2
+    ALPHA = 1
+
+
 ProjectType = Literal[
     "mod",
     "modpack",
@@ -169,6 +176,7 @@ class Search(BaseAPIModel):
 
 class Dependency(BaseAPIModel):
     project_id: str | None = None
+    version_id: str | None = None
     dependency_type: DependencyType
 
 
@@ -187,6 +195,7 @@ class File(BaseAPIModel):
 class ProjectVersion(BaseAPIModel):
     game_versions: list[str] = Field(default_factory=list)
     loaders: list[str] = Field(default_factory=list)
+    project_id: str
     version_type: VersionType
     files: list[File] = Field(default_factory=list)
     dependencies: list[Dependency] = Field(default_factory=list)
@@ -194,8 +203,8 @@ class ProjectVersion(BaseAPIModel):
     downloads: int
 
     @property
-    def stability(self) -> int:
-        return _STABILITY[self.version_type]
+    def stability(self) -> Stability:
+        return Stability[self.version_type.upper()]
 
     @property
     def published(self) -> datetime:
@@ -245,6 +254,7 @@ class LockPackage(BaseModel):
     state: State = "pending"
     client_side: Environment | None = None
     server_side: Environment | None = None
+    attempts: int = 0
 
 
 class LockFile(BaseModel):

@@ -14,7 +14,12 @@ from typing import TYPE_CHECKING, Any
 from httpx import AsyncClient, QueryParams, Response
 from pydantic import BaseModel
 
-from packsmith.core.models import Hit, ProjectVersion, ProjectVersions, Search
+from packsmith.core.models import (
+    Hit,
+    ProjectVersion,
+    ProjectVersions,
+    Search,
+)
 
 if TYPE_CHECKING:
     from packsmith.core.models import ProjectType
@@ -85,11 +90,29 @@ class ModrinthClient:
 
     async def get_project(self, project_id: str) -> Hit:
         endpoint = f"/project/{project_id}"
-        return Hit.model_validate_json(await self.get(endpoint))
+        return Hit.model_validate(await self.get(endpoint))
 
-    async def get_project_versions(self, project_id: str) -> list[ProjectVersion]:
+    async def get_project_versions(
+        self,
+        project_id: str,
+        *,
+        loaders: list[str] | None = None,
+        game_versions: list[str] | None = None,
+    ) -> list[ProjectVersion]:
+        params = {"include_changelog": "false"}
+
+        if loaders:
+            params["loaders"] = json.dumps(loaders)
+
+        if game_versions:
+            params["game_versions"] = json.dumps(game_versions)
+
         endpoint = f"/project/{project_id}/version"
-        return ProjectVersions.validate_python(await self.get(endpoint))
+        return ProjectVersions.validate_python(await self.get(endpoint, params=params))
+
+    async def get_version(self, version_id: str) -> ProjectVersion:
+        endpoint = f"/version/{version_id}"
+        return ProjectVersion.model_validate(await self.get(endpoint))
 
     def _update_rate_limit(self, resp: Response) -> None:
         headers = resp.headers

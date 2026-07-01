@@ -2,6 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 import asyncio
+from datetime import UTC, datetime, timedelta
 
 from packsmith.api import ModrinthClient
 from packsmith.core.models import (
@@ -12,14 +13,14 @@ from packsmith.core.models import (
     Manifest,
     ProjectType,
     ProjectVersion,
+    Stability,
 )
 
 MAX_CONCURRENT_REQUESTS = 5
+LIMIT_ATTEMPTS = 3
 
 
 class Resolver:
-    """Asynchronous dependency resolver for Modrinth-based modpacks."""
-
     def __init__(self, manifest: Manifest, *, include_optional: bool = False) -> None:
         self.manifest = manifest
         self.include_optional = include_optional
@@ -36,61 +37,76 @@ class Resolver:
             async with self.semaphore:
                 hit = await self.client.get_project(project_id)
         except Exception:  # noqa: BLE001
-            self.project_cache[project_id] = None
             return None
 
         self.project_cache[project_id] = hit
         return hit
 
-    def _select_version(
-        self, versions: list[ProjectVersion], project_type: ProjectType | None
-    ) -> ProjectVersion | None:
-        """Select the best compatible version based on stability and date.
-
-        Returns:
-            The best matching ProjectVersion, or None if no compatible version exists.
-
-        """
-        game_version = self.manifest.game_version
-        project_type = project_type or "mod"
-
-        if project_type == "mod":
-            loader = self.manifest.loader
-            compatible = [
-                v
-                for v in versions
-                if game_version in v.game_versions
-                and (loader in v.loaders or "minecraft" in v.loaders or not v.loaders)
-            ]
-        else:
-            compatible = [v for v in versions if game_version in v.game_versions]
-
-        if not compatible:
-            return None
-
-        # max by stability descending, then date descending
-        return max(compatible, key=lambda v: (v.stability, v.published))
-
-    async def _fetch_versions(self, project_id: str) -> list[ProjectVersion] | None:
-        """Fetch versions from API or cache, handling exceptions.
-
-        Returns:
-            A list of ProjectVersion objects, or None if the fetch fails.
-
-        """
+    async def _fetch_versions(
+        self, project_id: str, project_type: ProjectType | None
+    ) -> list[ProjectVersion] | None:
         if project_id in self.cache:
             return self.cache[project_id]
 
+        if project_type == "mod":
+            loaders = [self.manifest.loader]
+        elif project_type is None:
+            loaders = ["minecraft", self.manifest.loader]  # fallback
+        else:
+            loaders = ["minecraft", self.manifest.loader]
+
         try:
             async with self.semaphore:
-                versions = await self.client.get_project_versions(project_id)
-            self.cache[project_id] = versions
+                versions = await self.client.get_project_versions(
+                    project_id,
+                    loaders=loaders,
+                    game_versions=[self.manifest.game_version],
+                )
         except Exception:  # noqa: BLE001
-            # TODO: Integrate with project's logging framework to log the exception
-            self.cache[project_id] = []
             return None
 
+        self.cache[project_id] = versions
         return versions
+
+    async def _resolve_dependency_project_id(self, dep: Dependency) -> str | None:
+        if dep.project_id:
+            return dep.project_id
+
+        if dep.version_id:
+            try:
+                async with self.semaphore:
+                    version = await self.client.get_version(dep.version_id)
+            except Exception:  # noqa: BLE001
+                return None
+            else:
+                return version.project_id
+
+        return None
+
+    @staticmethod
+    def _select_version(versions: list[ProjectVersion]) -> ProjectVersion | None:
+        if not versions:
+            return None
+
+        now = datetime.now(UTC)
+        cutoff = now - timedelta(days=90)
+
+        stable_versions = [v for v in versions if v.stability >= Stability.BETA]
+
+        if stable_versions:
+            best_stable = max(
+                stable_versions,
+                key=lambda v: (v.stability, v.published, v.downloads),
+            )
+
+            if best_stable.published >= cutoff:
+                return best_stable
+
+        # fallback: allow anything
+        return max(
+            versions,
+            key=lambda v: (v.stability, v.downloads, v.published),
+        )
 
     @staticmethod
     def _populate_package_fields(package: LockPackage, hit: Hit) -> None:
@@ -101,34 +117,45 @@ class Resolver:
         if package.server_side is None:
             package.server_side = hit.server_side
 
-    def _filter_dependency_ids(
-        self, dependencies: list[Dependency], project_type: ProjectType | None
+    async def _filter_dependency_ids(
+        self, dependencies: list[Dependency]
     ) -> list[tuple[str, ProjectType | None]]:
         dep_ids: list[tuple[str, ProjectType | None]] = []
-        for dep in dependencies:
-            if not dep.project_id:
-                continue
 
+        for dep in dependencies:
             dep_type = dep.dependency_type
+
             if dep_type in {"embedded", "incompatible"}:
                 continue
             if dep_type == "optional" and not self.include_optional:
                 continue
 
-            dep_ids.append((dep.project_id, project_type))
+            project_id = await self._resolve_dependency_project_id(dep)
+            if not project_id:
+                continue
+
+            hit = await self._fetch_project(project_id)
+
+            real_type = hit.project_type if hit else None
+
+            dep_ids.append((project_id, real_type))
 
         return dep_ids
 
     async def _resolve_package(
         self, package: LockPackage
     ) -> list[tuple[str, ProjectType | None]]:
-        """Resolve a single package and return discovered dependencies.
+        versions = await self._fetch_versions(package.project_id, package.project_type)
+        package.attempts += 1
 
-        Returns:
-            A list of dependency tuples for newly discovered packages.
+        if package.attempts > LIMIT_ATTEMPTS:
+            package.state = "failed"
+            return []
 
-        """
-        versions = await self._fetch_versions(package.project_id)
+        if versions is None:
+            package.state = "pending"  # retry later
+            return []
+
         if not versions:
             package.state = "failed"
             return []
@@ -143,7 +170,7 @@ class Resolver:
             if package.server_side is None:
                 package.server_side = "unsupported"
 
-        wanted = self._select_version(versions, package.project_type)
+        wanted = self._select_version(versions)
         if not wanted:
             package.state = "failed"
             return []
@@ -155,24 +182,17 @@ class Resolver:
         package.file = wanted.files[0]
         package.state = "resolved"
 
-        return self._filter_dependency_ids(wanted.dependencies, package.project_type)
+        return await self._filter_dependency_ids(wanted.dependencies)
 
     async def _resolve_batch(
         self, pending_packages: list[LockPackage], seen: set[str]
     ) -> list[LockPackage]:
-        """Resolve a batch of packages concurrently and return new pending packages.
-
-        Returns:
-            A list of newly created pending LockPackage objects.
-
-        """
         tasks = [self._resolve_package(pkg) for pkg in pending_packages]
         results = await asyncio.gather(*tasks)
 
         new_packages = []
         for dep_ids in results:
             for project_id, project_type in dep_ids:
-                # O(1) membership check to prevent duplicates
                 if project_id not in seen:
                     seen.add(project_id)
                     new_packages.append(
@@ -187,18 +207,9 @@ class Resolver:
 
     @staticmethod
     def _get_pending_packages(lock: LockFile) -> list[LockPackage]:
-        """Return a list of packages that are still pending resolution.
-
-        Returns:
-            A list of pending packages.
-
-        """
         return [pkg for pkg in lock.packages if pkg.state == "pending"]
 
     async def first_layer(self, lock: LockFile) -> None:
-        """Resolve the initial packages in the lock file and
-        discover their dependencies.
-        """
         seen = {pkg.project_id for pkg in lock.packages}
         pending = self._get_pending_packages(lock)
 
@@ -209,11 +220,6 @@ class Resolver:
         lock.packages.extend(new_pkgs)
 
     async def second_layer(self, lock: LockFile) -> None:
-        """Resolve the remaining pending packages
-        until the dependency graph is complete.
-        This acts as a fixpoint algorithm,
-        repeating until no pending packages remain.
-        """
         seen = {pkg.project_id for pkg in lock.packages}
 
         while True:

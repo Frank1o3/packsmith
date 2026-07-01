@@ -1,5 +1,9 @@
 #!/bin/bash
 
+uv sync
+
+rm -r Testpack
+
 packsmith init Testpack 26.2 fabric 0.19.3
 cd Testpack
 
@@ -43,8 +47,6 @@ packsmith add "Let Me Despawn" mod
 packsmith add "NoisiumForked" mod
 packsmith add "ServerCore" mod
 packsmith add "Leaves Be Gone" mod
-packsmith add "Zoomify" mod
-packsmith add "Zoomify" mod
 
 packsmith resolve --include-optional
 echo ""
@@ -53,6 +55,7 @@ packsmith download
 echo ""
 
 packsmith export --client
+packsmith export --server --client
 cd ..
 
 echo ""
