@@ -14,17 +14,9 @@ dependencies = [
     "typer>=0.26.8",
 ]
 
-authors = [
-    { name = "Frank1o3" }
-]
+authors = [{ name = "Frank1o3" }]
 
-keywords = [
-    "minecraft",
-    "modrinth",
-    "curseforge",
-    "modpack",
-    "cli",
-]
+keywords = ["minecraft", "modrinth", "modpack", "cli"]
 
 classifiers = [
     "Development Status :: 3 - Alpha",
