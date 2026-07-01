@@ -120,9 +120,15 @@ class Resolver:
             package.state = "failed"
             return []
 
-        hit = await self._fetch_project(package.project_id)
-        if hit is not None:
-            self._populate_package_fields(package, hit)
+        if package.project_type == "mod":
+            hit = await self._fetch_project(package.project_id)
+            if hit is not None:
+                self._populate_package_fields(package, hit)
+        else:
+            if package.client_side is None:
+                package.client_side = "required"
+            if package.server_side is None:
+                package.server_side = "unsupported"
 
         wanted = self._select_version(versions)
         if not wanted:

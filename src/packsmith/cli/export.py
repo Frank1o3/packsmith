@@ -10,7 +10,14 @@ from zipfile import ZipFile
 import typer
 
 from packsmith.cli.ui import console
-from packsmith.core.models import Env, LockFile, Manifest, ModPack, ModPackFile
+from packsmith.core.models import (
+    Env,
+    LockFile,
+    LockPackage,
+    Manifest,
+    ModPack,
+    ModPackFile,
+)
 
 
 def load_lock(path: Path) -> LockFile:
@@ -21,6 +28,14 @@ def load_lock(path: Path) -> LockFile:
         data = tomllib.load(f)
 
     return LockFile.model_validate(data)
+
+
+def _get_export_path(package: LockPackage, path: Path) -> Path:
+    if package.project_type == "resourcepack":
+        return path / "overrides" / "resourcepacks"
+    if package.project_type == "shader":
+        return path / "overrides" / "shaderpacks"
+    return path / "mods"
 
 
 def build_pack_file(
@@ -50,7 +65,8 @@ def build_pack_file(
             continue
 
         filename = Path(package.file.url).name or "downloaded.file"
-        path = f"{package.project_type}/{filename}"
+        source_path = _get_export_path(package, Path.cwd()) / filename
+        path = source_path.relative_to(Path.cwd()).as_posix()
         pack.files.append(
             ModPackFile(
                 env=Env(client=package.client_side, server=package.server_side),
