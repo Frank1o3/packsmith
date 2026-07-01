@@ -10,6 +10,7 @@ from packsmith.core.models import (
     LockFile,
     LockPackage,
     Manifest,
+    ProjectType,
     ProjectVersion,
 )
 
@@ -41,7 +42,9 @@ class Resolver:
         self.project_cache[project_id] = hit
         return hit
 
-    def _select_version(self, versions: list[ProjectVersion]) -> ProjectVersion | None:
+    def _select_version(
+        self, versions: list[ProjectVersion], project_type: ProjectType | None
+    ) -> ProjectVersion | None:
         """Select the best compatible version based on stability and date.
 
         Returns:
@@ -49,7 +52,7 @@ class Resolver:
 
         """
         game_version = self.manifest.game_version
-        loader = self.manifest.loader
+        loader = self.manifest.loader if project_type == "mod" else "minecraft"
 
         compatible = [
             v
@@ -130,7 +133,7 @@ class Resolver:
             if package.server_side is None:
                 package.server_side = "unsupported"
 
-        wanted = self._select_version(versions)
+        wanted = self._select_version(versions, package.project_type)
         if not wanted:
             package.state = "failed"
             return []
