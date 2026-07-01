@@ -147,7 +147,8 @@ def export_pack(
                 if config_file.is_file():
                     arcname = f"overrides/config/{config_file.relative_to(config_dir)}"
                     zip_file.write(config_file, arcname=arcname)
-    console.print(f"[green]Exported modpack:[/green] {export_path.name}")
+    msg = side if side != "both" else "client and server"
+    console.print(f"[green]Exported {msg} modpack:[/green] {export_path.name}")
 
 
 def export(
