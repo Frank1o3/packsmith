@@ -91,9 +91,6 @@ class ModrinthClient:
         endpoint = f"/project/{project_id}/version"
         return ProjectVersions.validate_python(await self.get(endpoint))
 
-    # ------------------------
-    # rate limit logic
-    # ------------------------
     def _update_rate_limit(self, resp: Response) -> None:
         headers = resp.headers
 
@@ -122,9 +119,6 @@ class ModrinthClient:
     async def __aexit__(self, *_: object) -> None:
         await self.close()
 
-    # ------------------------
-    # Static methods
-    # ------------------------
     @staticmethod
     def _safe_int(value: str | None) -> int | None:
         try:
