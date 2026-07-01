@@ -104,8 +104,10 @@ def export_pack(
         server_side=side == {"server", "both"},
     )
     pack_file.write_text(pack.model_dump_json(indent=2), encoding="UTF-8")
+    tag = f"-{side}" if side != "both" else ""
+    export_path = path / f"{manifest.name}{tag}.mrpack"
 
-    with ZipFile(path / f"{manifest.name}.mrpack", "w") as zip_file:
+    with ZipFile(export_path, "w") as zip_file:
         zip_file.write(pack_file, arcname="modrinth.index.json")
         zip_file.write(register_file, arcname="meta.json")
         zip_file.write(lock_file, arcname="lock.toml")
@@ -133,6 +135,7 @@ def export_pack(
                 if config_file.is_file():
                     arcname = f"overrides/config/{config_file.relative_to(config_dir)}"
                     zip_file.write(config_file, arcname=arcname)
+    console.print(f"[green]Exported modpack:[/green] {export_path.name}")
 
 
 def export(
