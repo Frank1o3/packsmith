@@ -3,7 +3,6 @@
 
 import asyncio
 import tomllib
-from importlib.metadata import version
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -26,10 +25,6 @@ from packsmith.core.models import (
     Search,
 )
 
-USER_AGENT = (
-    f"Frank1o3/packsmith/{version('packsmith')} (https://github.com/Frank1o3/packsmith)"
-)
-
 if TYPE_CHECKING:
     from rich.console import Console
 
@@ -37,7 +32,7 @@ if TYPE_CHECKING:
 async def search(
     name: str, project_type: ProjectType, loader: str, game_version: str
 ) -> Search:
-    client = ModrinthClient(USER_AGENT)
+    client = ModrinthClient()
     return await client.search(name, project_type, loader, game_version)
 
 
@@ -61,7 +56,7 @@ def save_manifest(path: Path, manifest: Manifest) -> None:
 
 
 def has_package(lock: LockFile, project_id: str) -> bool:
-    return any(pkg.project_id == project_id for pkg in lock.package)
+    return any(pkg.project_id == project_id for pkg in lock.packages)
 
 
 def select_match(matched: MatchResults, console: Console) -> Hit:
@@ -116,10 +111,8 @@ def apply_add(
         target_list.append(hit.title)
 
     if not has_package(lock, hit.project_id):
-        lock.package.append(
-            LockPackage(
-                name=hit.title, project_id=hit.project_id, project_type=hit.project_type
-            )
+        lock.packages.append(
+            LockPackage(project_id=hit.project_id, project_type=hit.project_type)
         )
 
 

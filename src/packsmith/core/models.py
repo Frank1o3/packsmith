@@ -1,6 +1,7 @@
 # Copyright (c) 2026 Frank1o3
 # SPDX-License-Identifier: MIT
 import re
+from datetime import datetime
 from difflib import SequenceMatcher
 from enum import IntEnum
 from operator import attrgetter
@@ -40,6 +41,12 @@ VersionType = Literal[
     "beta",
     "alpha",
 ]
+State = Literal[
+    "pending",
+    "resolved",
+    "failed",
+]
+
 PROJECT_TYPE_TO_FIELD = {
     "mod": "mods",
     "resourcepack": "resourcepacks",
@@ -181,28 +188,22 @@ class ProjectVersion(BaseAPIModel):
     version_type: VersionType
     files: list[File] = Field(default_factory=list)
     dependencies: list[Dependency] = Field(default_factory=list)
-
-    @property
-    def is_release(self) -> bool:
-        return self.version_type == "release"
-
-    @property
-    def is_beta(self) -> bool:
-        return self.version_type == "beta"
-
-    @property
-    def is_alpha(self) -> bool:
-        return self.version_type == "alpha"
+    date_published: str
+    downloads: int
 
     @property
     def stability(self) -> int:
         return _STABILITY[self.version_type]
 
+    @property
+    def published(self) -> datetime:
+        dt_str = self.date_published.replace("Z", "+00:00")
+        return datetime.fromisoformat(dt_str)
+
 
 ProjectVersions = TypeAdapter(list[ProjectVersion])
 
 
-# Meta.json file used for storing the pack data
 class Manifest(BaseAPIModel):
     name: str
     game_version: str
@@ -236,11 +237,11 @@ class ModPack(BaseAPIModel):
 
 
 class LockPackage(BaseModel):
-    name: str
     project_id: str
-    project_type: ProjectType
-    url: str | None = None
+    project_type: ProjectType | None = None
+    file: File | None = None
+    state: State = "pending"
 
 
 class LockFile(BaseModel):
-    package: list[LockPackage] = Field(default_factory=list)
+    packages: list[LockPackage] = Field(default_factory=list)

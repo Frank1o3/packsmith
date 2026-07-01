@@ -7,6 +7,7 @@ import json
 import logging
 import time
 from collections.abc import Mapping, Sequence
+from importlib.metadata import version
 from typing import TYPE_CHECKING, Any
 
 from httpx import AsyncClient, QueryParams, Response
@@ -41,7 +42,9 @@ class RateLimitState(BaseModel):
 class ModrinthClient:
     BASE_URL = "https://api.modrinth.com/v2"
 
-    def __init__(self, user_agent: str) -> None:
+    def __init__(self) -> None:
+        user_agent = f"Frank1o3/packsmith/{version('packsmith')} (https://github.com/Frank1o3/packsmith)"
+
         self._client = AsyncClient(
             base_url=self.BASE_URL, headers={"User-Agent": user_agent}, timeout=30.0
         )
