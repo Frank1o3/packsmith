@@ -26,8 +26,17 @@ class Resolver:
         self.include_optional = include_optional
         self.client = ModrinthClient()
         self.semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
+
         self.cache: dict[str, list[ProjectVersion]] = {}
         self.project_cache: dict[str, Hit | None] = {}
+
+        # 🔥 NEW: conflict system
+        self.incompatibilities: dict[str, set[str]] = {}
+        self.root_projects: set[str] = set()
+
+    # -------------------------
+    # Fetching
+    # -------------------------
 
     async def _fetch_project(self, project_id: str) -> Hit | None:
         if project_id in self.project_cache:
@@ -48,11 +57,13 @@ class Resolver:
         if project_id in self.cache:
             return self.cache[project_id]
 
+        # 🔥 FIXED: better loader handling (helps shaders/resourcepacks)
         if project_type == "mod":
             loaders = [self.manifest.loader]
-        elif project_type is None:
-            loaders = ["minecraft", self.manifest.loader]  # fallback
+        elif project_type == "shader":
+            loaders = ["iris", "optifine", "minecraft"]
         else:
+            # datapack / shader / resourcepack fallback
             loaders = ["minecraft", self.manifest.loader]
 
         try:
@@ -83,6 +94,10 @@ class Resolver:
 
         return None
 
+    # -------------------------
+    # Version selection
+    # -------------------------
+
     @staticmethod
     def _select_version(versions: list[ProjectVersion]) -> ProjectVersion | None:
         if not versions:
@@ -102,11 +117,62 @@ class Resolver:
             if best_stable.published >= cutoff:
                 return best_stable
 
-        # fallback: allow anything
         return max(
             versions,
             key=lambda v: (v.stability, v.downloads, v.published),
         )
+
+    # -------------------------
+    # Conflict system
+    # -------------------------
+
+    def _register_incompatibility(self, a: str, b: str) -> None:
+        self.incompatibilities.setdefault(a, set()).add(b)
+        self.incompatibilities.setdefault(b, set()).add(a)
+
+    def _is_conflict(self, project_id: str, seen: set[str]) -> bool:
+        conflicts = self.incompatibilities.get(project_id, set())
+        return any(p in seen for p in conflicts)
+
+    # -------------------------
+    # Dependency processing
+    # -------------------------
+
+    async def _filter_dependency_ids(
+        self,
+        dependencies: list[Dependency],
+        current_project: str,
+    ) -> list[tuple[str, ProjectType | None]]:
+        dep_ids: list[tuple[str, ProjectType | None]] = []
+
+        for dep in dependencies:
+            dep_type = dep.dependency_type
+
+            project_id = await self._resolve_dependency_project_id(dep)
+            if not project_id:
+                continue
+
+            # 🔥 Register incompatibilities
+            if dep_type == "incompatible":
+                self._register_incompatibility(current_project, project_id)
+                continue
+
+            if dep_type == "embedded":
+                continue
+
+            if dep_type == "optional" and not self.include_optional:
+                continue
+
+            hit = await self._fetch_project(project_id)
+            real_type = hit.project_type if hit else None
+
+            dep_ids.append((project_id, real_type))
+
+        return dep_ids
+
+    # -------------------------
+    # Package resolution
+    # -------------------------
 
     @staticmethod
     def _populate_package_fields(package: LockPackage, hit: Hit) -> None:
@@ -116,31 +182,8 @@ class Resolver:
             package.client_side = hit.client_side
         if package.server_side is None:
             package.server_side = hit.server_side
-
-    async def _filter_dependency_ids(
-        self, dependencies: list[Dependency]
-    ) -> list[tuple[str, ProjectType | None]]:
-        dep_ids: list[tuple[str, ProjectType | None]] = []
-
-        for dep in dependencies:
-            dep_type = dep.dependency_type
-
-            if dep_type in {"embedded", "incompatible"}:
-                continue
-            if dep_type == "optional" and not self.include_optional:
-                continue
-
-            project_id = await self._resolve_dependency_project_id(dep)
-            if not project_id:
-                continue
-
-            hit = await self._fetch_project(project_id)
-
-            real_type = hit.project_type if hit else None
-
-            dep_ids.append((project_id, real_type))
-
-        return dep_ids
+        if package.version_number is None:
+            package.version_number = hit.version_number
 
     async def _resolve_package(
         self, package: LockPackage
@@ -153,7 +196,7 @@ class Resolver:
             return []
 
         if versions is None:
-            package.state = "pending"  # retry later
+            package.state = "pending"
             return []
 
         if not versions:
@@ -171,18 +214,22 @@ class Resolver:
                 package.server_side = "unsupported"
 
         wanted = self._select_version(versions)
-        if not wanted:
-            package.state = "failed"
-            return []
-
-        if not wanted.files:
+        if not wanted or not wanted.files:
             package.state = "failed"
             return []
 
         package.file = wanted.files[0]
         package.state = "resolved"
+        package.version_number = wanted.version_number
 
-        return await self._filter_dependency_ids(wanted.dependencies)
+        return await self._filter_dependency_ids(
+            wanted.dependencies,
+            package.project_id,
+        )
+
+    # -------------------------
+    # Batch resolution
+    # -------------------------
 
     async def _resolve_batch(
         self, pending_packages: list[LockPackage], seen: set[str]
@@ -191,26 +238,45 @@ class Resolver:
         results = await asyncio.gather(*tasks)
 
         new_packages = []
-        for dep_ids in results:
+
+        for pkg, dep_ids in zip(pending_packages, results, strict=False):
             for project_id, project_type in dep_ids:
-                if project_id not in seen:
-                    seen.add(project_id)
-                    new_packages.append(
-                        LockPackage(
-                            project_id=project_id,
-                            project_type=project_type,
-                            state="pending",
-                        )
+                if project_id in seen:
+                    continue
+
+                # 🔥 Conflict handling
+                if self._is_conflict(project_id, seen):
+                    if project_id in self.root_projects:
+                        # root vs root conflict → mark
+                        pkg.state = "conflict"
+                    # dependency loses → skip
+                    continue
+
+                seen.add(project_id)
+
+                new_packages.append(
+                    LockPackage(
+                        project_id=project_id,
+                        project_type=project_type,
+                        state="pending",
                     )
+                )
 
         return new_packages
+
+    # -------------------------
+    # Layers
+    # -------------------------
 
     @staticmethod
     def _get_pending_packages(lock: LockFile) -> list[LockPackage]:
         return [pkg for pkg in lock.packages if pkg.state == "pending"]
 
     async def first_layer(self, lock: LockFile) -> None:
-        seen = {pkg.project_id for pkg in lock.packages}
+        # 🔥 Initialize root projects
+        self.root_projects = {pkg.project_id for pkg in lock.packages}
+
+        seen = set(self.root_projects)
         pending = self._get_pending_packages(lock)
 
         if not pending:

@@ -104,7 +104,6 @@ def export_pack(
     path = Path.cwd()
 
     register_file = path / "meta.json"
-    lock_file = path / "lock.toml"
     pack_file = path / "modrinth.index.json"
 
     pack_file.touch(exist_ok=True)
@@ -122,7 +121,6 @@ def export_pack(
     with ZipFile(export_path, "w", compression=ZIP_DEFLATED) as zip_file:
         zip_file.write(pack_file, arcname="modrinth.index.json")
         zip_file.write(register_file, arcname="meta.json")
-        zip_file.write(lock_file, arcname="lock.toml")
 
         # Create the directory structure for mods, resourcepacks, and shaderpacks
         zip_file.writestr("mods/", "")

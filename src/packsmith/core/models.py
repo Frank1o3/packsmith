@@ -49,11 +49,7 @@ VersionType = Literal[
     "beta",
     "alpha",
 ]
-State = Literal[
-    "pending",
-    "resolved",
-    "failed",
-]
+State = Literal["pending", "resolved", "failed", "conflict"]
 
 PROJECT_TYPE_TO_FIELD = {
     "mod": "mods",
@@ -91,6 +87,8 @@ class Hit(BaseAPIModel):
 
     client_side: Environment = "unsupported"
     server_side: Environment = "unsupported"
+
+    version_number: str | None = None
 
     @property
     def normalized_title(self) -> str:
@@ -201,6 +199,7 @@ class ProjectVersion(BaseAPIModel):
     dependencies: list[Dependency] = Field(default_factory=list)
     date_published: str
     downloads: int
+    version_number: str | None = None
 
     @property
     def stability(self) -> Stability:
@@ -215,14 +214,19 @@ class ProjectVersion(BaseAPIModel):
 ProjectVersions = TypeAdapter(list[ProjectVersion])
 
 
+class Identifer(BaseAPIModel):
+    project_id: str
+    name: str
+
+
 class Manifest(BaseAPIModel):
     name: str
     game_version: str
     loader: str
     loader_version: str
-    mods: list[str] = Field(default_factory=list)
-    resourcepacks: list[str] = Field(default_factory=list)
-    shaderpacks: list[str] = Field(default_factory=list)
+    mods: list[Identifer] = Field(default_factory=list)
+    resourcepacks: list[Identifer] = Field(default_factory=list)
+    shaderpacks: list[Identifer] = Field(default_factory=list)
 
 
 class Env(BaseAPIModel):
@@ -255,6 +259,7 @@ class LockPackage(BaseModel):
     client_side: Environment | None = None
     server_side: Environment | None = None
     attempts: int = 0
+    version_number: str | None = None
 
 
 class LockFile(BaseModel):

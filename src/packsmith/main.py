@@ -8,7 +8,7 @@ from packsmith.cli.downloader import download
 from packsmith.cli.export import export
 from packsmith.cli.resolve import resolve
 from packsmith.cli.setup import setup
-from packsmith.cli.ui import console, print_banner
+from packsmith.cli.ui import print_banner
 
 app = typer.Typer()
 
@@ -28,7 +28,6 @@ app.command(name="export", help="Export a modpack for distribution.")(export)
 def callback(ctx: typer.Context) -> None:
     if ctx.invoked_subcommand is None:
         print_banner()
-        console.print("[dim]Use --help to see available commands[/dim]")
 
 
 def main() -> None:
