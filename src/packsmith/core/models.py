@@ -225,6 +225,8 @@ class ModPackFile(BaseAPIModel):
     path: str
     hashes: Hashes
     env: Env
+    downloads: list[str] = Field(default_factory=list)
+    fileSize: int | None = None  # noqa: N815
 
 
 class ModPack(BaseAPIModel):

@@ -79,6 +79,8 @@ def build_pack_file(
                 path=path.removeprefix("overrides/")
                 if path.startswith("overrides/")
                 else path,
+                downloads=[package.file.url],
+                fileSize=package.file.size,
             )
         )
 
