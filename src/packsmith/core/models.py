@@ -241,6 +241,8 @@ class LockPackage(BaseModel):
     project_type: ProjectType | None = None
     file: File | None = None
     state: State = "pending"
+    client_side: Environment | None = None
+    server_side: Environment | None = None
 
 
 class LockFile(BaseModel):

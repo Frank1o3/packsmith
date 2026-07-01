@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING, Any
 from httpx import AsyncClient, QueryParams, Response
 from pydantic import BaseModel
 
-from packsmith.core.models import ProjectVersion, ProjectVersions, Search
+from packsmith.core.models import Hit, ProjectVersion, ProjectVersions, Search
 
 if TYPE_CHECKING:
     from packsmith.core.models import ProjectType
@@ -80,8 +80,11 @@ class ModrinthClient:
         }
         if project_type == "mod":
             facets.append([f"categories:{loader}"])
-            params["loaders"] = [loader]
         return Search.model_validate(await self.get("/search", params=params))
+
+    async def get_project(self, project_id: str) -> Hit:
+        endpoint = f"/project/{project_id}/"
+        return Hit.model_validate_json(await self.get(endpoint))
 
     async def get_project_versions(self, project_id: str) -> list[ProjectVersion]:
         endpoint = f"/project/{project_id}/version"

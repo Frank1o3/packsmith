@@ -4,7 +4,7 @@ import asyncio
 import sys
 from pathlib import Path
 
-import click
+import typer
 
 from packsmith.cli.ui import console
 from packsmith.core.models import LockFile, Manifest
@@ -14,14 +14,13 @@ MANIFEST_FILE = "meta.json"
 LOCK_FILE = "packsmith.lock.json"
 
 
-@click.command()
-@click.option(
-    "--include-optional",
-    is_flag=True,
-    default=False,
-    help="Include optional dependencies during resolution.",
-)
-def resolve(*, include_optional: bool = False) -> None:
+def resolve(
+    *,
+    include_optional: bool = typer.Option(
+        default=False,
+        help="Include optional dependencies during resolution.",
+    ),
+) -> None:
     """Resolve all dependencies for the current modpack."""
     manifest_path = Path(MANIFEST_FILE)
     lock_path = Path(LOCK_FILE)

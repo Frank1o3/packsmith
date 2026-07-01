@@ -4,6 +4,8 @@ import asyncio
 
 from packsmith.api import ModrinthClient
 from packsmith.core.models import (
+    Dependency,
+    Hit,
     LockFile,
     LockPackage,
     Manifest,
@@ -22,6 +24,21 @@ class Resolver:
         self.client = ModrinthClient()
         self.semaphore = asyncio.Semaphore(MAX_CONCURRENT_REQUESTS)
         self.cache: dict[str, list[ProjectVersion]] = {}
+        self.project_cache: dict[str, Hit | None] = {}
+
+    async def _fetch_project(self, project_id: str) -> Hit | None:
+        if project_id in self.project_cache:
+            return self.project_cache[project_id]
+
+        try:
+            async with self.semaphore:
+                hit = await self.client.get_project(project_id)
+        except Exception:  # noqa: BLE001
+            self.project_cache[project_id] = None
+            return None
+
+        self.project_cache[project_id] = hit
+        return hit
 
     def _select_version(self, versions: list[ProjectVersion]) -> ProjectVersion | None:
         """Select the best compatible version based on stability and date.
@@ -65,6 +82,31 @@ class Resolver:
 
         return versions
 
+    @staticmethod
+    def _populate_package_fields(package: LockPackage, hit: Hit) -> None:
+        if package.project_type is None:
+            package.project_type = hit.project_type
+        if package.client_side is None:
+            package.client_side = hit.client_side
+        if package.server_side is None:
+            package.server_side = hit.server_side
+
+    def _filter_dependency_ids(self, dependencies: list[Dependency]) -> list[str]:
+        dep_ids: list[str] = []
+        for dep in dependencies:
+            if not dep.project_id:
+                continue
+
+            dep_type = dep.dependency_type
+            if dep_type in {"embedded", "incompatible"}:
+                continue
+            if dep_type == "optional" and not self.include_optional:
+                continue
+
+            dep_ids.append(dep.project_id)
+
+        return dep_ids
+
     async def _resolve_package(self, package: LockPackage) -> list[str]:
         """Resolve a single package and return discovered dependency IDs.
 
@@ -76,6 +118,10 @@ class Resolver:
         if not versions:
             package.state = "failed"
             return []
+
+        hit = await self._fetch_project(package.project_id)
+        if hit is not None:
+            self._populate_package_fields(package, hit)
 
         wanted = self._select_version(versions)
         if not wanted:
@@ -89,22 +135,7 @@ class Resolver:
         package.file = wanted.files[0]
         package.state = "resolved"
 
-        dep_ids = []
-        for dep in wanted.dependencies:
-            if not dep.project_id:
-                continue
-
-            dep_type = dep.dependency_type
-
-            # Apply dependency policy
-            if dep_type in {"embedded", "incompatible"}:
-                continue
-            if dep_type == "optional" and not self.include_optional:
-                continue
-
-            dep_ids.append(dep.project_id)
-
-        return dep_ids
+        return self._filter_dependency_ids(wanted.dependencies)
 
     async def _resolve_batch(
         self, pending_packages: list[LockPackage], seen: set[str]

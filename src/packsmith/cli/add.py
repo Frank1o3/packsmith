@@ -112,7 +112,12 @@ def apply_add(
 
     if not has_package(lock, hit.project_id):
         lock.packages.append(
-            LockPackage(project_id=hit.project_id, project_type=hit.project_type)
+            LockPackage(
+                project_id=hit.project_id,
+                project_type=hit.project_type,
+                client_side=hit.client_side,
+                server_side=hit.server_side,
+            )
         )
 
 
