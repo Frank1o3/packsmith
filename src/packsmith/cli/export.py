@@ -5,7 +5,8 @@
 import tomllib
 from pathlib import Path
 from typing import Literal
-from zipfile import ZipFile
+from urllib.parse import unquote, urlparse
+from zipfile import ZIP_DEFLATED, ZipFile
 
 import typer
 
@@ -64,14 +65,20 @@ def build_pack_file(
         if not server_side and package.server_side in {"required", "optional"}:
             continue
 
-        filename = Path(package.file.url).name or "downloaded.file"
+        filename = (
+            package.file.filename
+            or Path(unquote(urlparse(package.file.url).path)).name
+            or "downloaded.file"
+        )
         source_path = _get_export_path(package, Path.cwd()) / filename
         path = source_path.relative_to(Path.cwd()).as_posix()
         pack.files.append(
             ModPackFile(
                 env=Env(client=package.client_side, server=package.server_side),
                 hashes=package.file.hashes,
-                path=path,
+                path=path.removeprefix("overrides/")
+                if path.startswith("overrides/")
+                else path,
             )
         )
 
@@ -100,30 +107,17 @@ def export_pack(
 
     pack_file.touch(exist_ok=True)
 
-    if not register_file.exists():
-        console.print(
-            "[red]Error:[/red] Not inside a Packsmith project (meta.json not found)."
-        )
-        typer.Exit(code=1)
-
-    if not lock_file.exists():
-        console.print("[red]Error:[/red] Missing lock file.")
-        typer.Exit(code=1)
-
-    manifest = Manifest.model_validate_json(register_file.read_text("UTF-8"))
-    lock = load_lock(lock_file)
-
     pack = build_pack_file(
         manifest,
         lock,
-        client_side=side == {"client", "both"},
-        server_side=side == {"server", "both"},
+        client_side=side in {"client", "both"},
+        server_side=side in {"server", "both"},
     )
     pack_file.write_text(pack.model_dump_json(indent=2), encoding="UTF-8")
     tag = f"-{side}" if side != "both" else ""
     export_path = path / f"{manifest.name}{tag}.mrpack"
 
-    with ZipFile(export_path, "w") as zip_file:
+    with ZipFile(export_path, "w", compression=ZIP_DEFLATED) as zip_file:
         zip_file.write(pack_file, arcname="modrinth.index.json")
         zip_file.write(register_file, arcname="meta.json")
         zip_file.write(lock_file, arcname="lock.toml")

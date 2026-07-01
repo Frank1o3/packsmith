@@ -88,3 +88,8 @@ When you initialize a pack, Packsmith creates a basic folder layout similar to t
 ## Notes
 
 Packsmith is still being developed, and some features are still evolving. The current focus is on building a reliable workflow for modpack creation, dependency resolution, and export.
+
+And i am planning on adding a command that takes in you minecraft version and loader and will give you back the latest most compatible loader for that version of the game
+
+## Mention
+You can look at the [test.sh](test.sh) file in the repos root the code in it makes a basic modpack and you can use it as reference

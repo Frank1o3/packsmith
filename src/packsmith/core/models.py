@@ -181,6 +181,7 @@ class File(BaseAPIModel):
     url: str
     hashes: Hashes
     size: int
+    filename: str | None = None
 
 
 class ProjectVersion(BaseAPIModel):

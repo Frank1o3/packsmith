@@ -52,13 +52,19 @@ class Resolver:
 
         """
         game_version = self.manifest.game_version
-        loader = self.manifest.loader if project_type == "mod" else "minecraft"
+        project_type = project_type or "mod"
 
-        compatible = [
-            v
-            for v in versions
-            if game_version in v.game_versions and loader in v.loaders
-        ]
+        if project_type == "mod":
+            loader = self.manifest.loader
+            compatible = [
+                v
+                for v in versions
+                if game_version in v.game_versions
+                and (loader in v.loaders or "minecraft" in v.loaders or not v.loaders)
+            ]
+        else:
+            compatible = [v for v in versions if game_version in v.game_versions]
+
         if not compatible:
             return None
 
@@ -95,8 +101,10 @@ class Resolver:
         if package.server_side is None:
             package.server_side = hit.server_side
 
-    def _filter_dependency_ids(self, dependencies: list[Dependency]) -> list[str]:
-        dep_ids: list[str] = []
+    def _filter_dependency_ids(
+        self, dependencies: list[Dependency], project_type: ProjectType | None
+    ) -> list[tuple[str, ProjectType | None]]:
+        dep_ids: list[tuple[str, ProjectType | None]] = []
         for dep in dependencies:
             if not dep.project_id:
                 continue
@@ -107,15 +115,17 @@ class Resolver:
             if dep_type == "optional" and not self.include_optional:
                 continue
 
-            dep_ids.append(dep.project_id)
+            dep_ids.append((dep.project_id, project_type))
 
         return dep_ids
 
-    async def _resolve_package(self, package: LockPackage) -> list[str]:
-        """Resolve a single package and return discovered dependency IDs.
+    async def _resolve_package(
+        self, package: LockPackage
+    ) -> list[tuple[str, ProjectType | None]]:
+        """Resolve a single package and return discovered dependencies.
 
         Returns:
-            A list of project IDs for newly discovered dependencies.
+            A list of dependency tuples for newly discovered packages.
 
         """
         versions = await self._fetch_versions(package.project_id)
@@ -145,7 +155,7 @@ class Resolver:
         package.file = wanted.files[0]
         package.state = "resolved"
 
-        return self._filter_dependency_ids(wanted.dependencies)
+        return self._filter_dependency_ids(wanted.dependencies, package.project_type)
 
     async def _resolve_batch(
         self, pending_packages: list[LockPackage], seen: set[str]
@@ -161,12 +171,16 @@ class Resolver:
 
         new_packages = []
         for dep_ids in results:
-            for project_id in dep_ids:
+            for project_id, project_type in dep_ids:
                 # O(1) membership check to prevent duplicates
                 if project_id not in seen:
                     seen.add(project_id)
                     new_packages.append(
-                        LockPackage(project_id=project_id, state="pending")
+                        LockPackage(
+                            project_id=project_id,
+                            project_type=project_type,
+                            state="pending",
+                        )
                     )
 
         return new_packages

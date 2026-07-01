@@ -7,7 +7,7 @@ import hmac
 import tomllib
 from importlib.metadata import version
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import unquote, urlparse
 
 import httpx
 import typer
@@ -38,10 +38,13 @@ def load_lock(path: Path) -> LockFile:
     return LockFile.model_validate(data)
 
 
-def _get_filename_from_url(url: str) -> str:
-    name = Path(urlparse(url).path).name
+def _get_filename_from_url(url: str, *, fallback: str | None = None) -> str:
+    if fallback:
+        return fallback
+
+    name = Path(unquote(urlparse(url).path)).name
     if not name:
-        name = url.rsplit("/", maxsplit=1)[-1]
+        name = unquote(url.rsplit("/", maxsplit=1)[-1])
     return name or "downloaded.file"
 
 
@@ -96,7 +99,7 @@ async def _download_package(
         raise RuntimeError(message)
 
     file = package.file
-    filename = _get_filename_from_url(file.url)
+    filename = _get_filename_from_url(file.url, fallback=file.filename)
     target_path = target_dir / filename
     await _ensure_dir(target_dir)
 
