@@ -1,5 +1,6 @@
 # Copyright (c) 2026 Frank1o3
 # SPDX-License-Identifier: MIT
+
 from __future__ import annotations
 
 import asyncio

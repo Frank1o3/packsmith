@@ -43,6 +43,9 @@ ignore = [
     # Allow Any when needed
     "ANN401",
 
+    # Security exceptions
+    "S324",
+
     # Formatter compatibility
     "COM812",
     "ISC001",
@@ -51,11 +54,7 @@ ignore = [
 dummy-variable-rgx = "^(_+|(_[A-Za-z0-9_]*[A-Za-z0-9]+?))$"
 
 [lint.per-file-ignores]
-"tests/**/*.py" = [
-    "S101",
-    "D",
-    "PLR2004",
-]
+"tests/**/*.py" = ["S101", "D", "PLR2004"]
 
 [format]
 quote-style = "double"

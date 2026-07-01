@@ -1,17 +1,32 @@
 # Copyright (c) 2026 Frank1o3
 # SPDX-License-Identifier: MIT
+
 import asyncio
 import sys
+import tomllib
 from pathlib import Path
 
+import tomli_w
 import typer
 
 from packsmith.cli.ui import console
 from packsmith.core.models import LockFile, Manifest
 from packsmith.core.solver import Resolver
 
-MANIFEST_FILE = "meta.json"
-LOCK_FILE = "packsmith.lock.json"
+
+def load_lock(path: Path) -> LockFile:
+    if path.stat().st_size == 0:
+        return LockFile()
+
+    with path.open("rb") as f:
+        data = tomllib.load(f)
+
+    return LockFile.model_validate(data)
+
+
+def save_lock(path: Path, lock: LockFile) -> None:
+    with path.open("wb") as f:
+        tomli_w.dump(lock.model_dump(exclude_none=True), f)
 
 
 def resolve(
@@ -22,30 +37,27 @@ def resolve(
     ),
 ) -> None:
     """Resolve all dependencies for the current modpack."""
-    manifest_path = Path(MANIFEST_FILE)
-    lock_path = Path(LOCK_FILE)
+    path = Path.cwd()
+    register_file = path / "meta.json"
+    lock_file = path / "lock.toml"
 
-    if not manifest_path.exists():
+    if not register_file.exists():
         console.print(
             "[red]Error:[/red] Not inside a Packsmith project (meta.json not found)."
         )
-        sys.exit(1)
+        typer.Exit(code=1)
 
-    if not lock_path.exists():
+    if not lock_file.exists():
         console.print("[red]Error:[/red] Missing lock file.")
-        sys.exit(1)
+        typer.Exit(code=1)
 
-    manifest = Manifest.model_validate_json(manifest_path.read_text("UTF-8"))
-    lock = LockFile.model_validate_json(lock_path.read_text("UTF-8"))
+    manifest = Manifest.model_validate_json(register_file.read_text("UTF-8"))
+    lock = load_lock(lock_file)
 
     resolver = Resolver(manifest, include_optional=include_optional)
 
     async def _write_lock() -> None:
-        await asyncio.to_thread(
-            lock_path.write_text,
-            lock.model_dump_json(indent=2),
-            "utf-8",
-        )
+        await asyncio.to_thread(save_lock, lock_file, lock)
 
     async def _run() -> None:
         console.print("Resolving root packages...")

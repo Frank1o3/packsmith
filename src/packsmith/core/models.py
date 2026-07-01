@@ -1,5 +1,6 @@
 # Copyright (c) 2026 Frank1o3
 # SPDX-License-Identifier: MIT
+
 import re
 from datetime import datetime
 from difflib import SequenceMatcher
@@ -223,14 +224,12 @@ class ModPackFile(BaseAPIModel):
     path: str
     hashes: Hashes
     env: Env
-    downloads: list[str] = Field(default_factory=list)
-    fileSize: int  # noqa: N815
 
 
 class ModPack(BaseAPIModel):
     formatVersion: int = 1  # noqa: N815
     game: str = "minecraft"
-    versionId: str  # noqa: N815
+    versionId: str = "1.0.0"  # noqa: N815
     name: str
     files: list[ModPackFile] = Field(default_factory=list)
     dependencies: dict[str, str] = Field(default_factory=dict)
