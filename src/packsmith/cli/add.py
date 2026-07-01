@@ -156,5 +156,5 @@ def add(name: str, project_type: ProjectType) -> None:
     save_manifest(register_file, info)
     save_lock(lock_file, lock)
     console.log(
-        f"[green]Added {hit.title} ({hit.project_type}) to the modpack.[/green]"
+        f"[green]Added[/green] {hit.title} ({hit.project_type}) to the modpack."
     )
