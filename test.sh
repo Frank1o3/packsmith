@@ -47,6 +47,19 @@ packsmith add "Zoomify" mod
 packsmith add "Zoomify" mod
 
 packsmith resolve --include-optional
+echo ""
+
 packsmith download
+echo ""
+
 packsmith export --client
 cd ..
+
+echo "============================================================"
+echo "  Note: one dependency may still be reported as unresolved."
+echo "  This is expected for project vGoiKzZE (Audioplayer Roleplay)."
+echo "  Modrinth currently does not expose the project metadata for"
+echo "  https://api.modrinth.com/v2/project/vGoiKzZE/, so Packsmith"
+echo "  cannot determine whether it should be treated as a mod,"
+echo "  resource pack, or shader."
+echo "============================================================"
