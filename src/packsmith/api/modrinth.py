@@ -84,7 +84,7 @@ class ModrinthClient:
         return Search.model_validate(await self.get("/search", params=params))
 
     async def get_project(self, project_id: str) -> Hit:
-        endpoint = f"/project/{project_id}/"
+        endpoint = f"/project/{project_id}"
         return Hit.model_validate_json(await self.get(endpoint))
 
     async def get_project_versions(self, project_id: str) -> list[ProjectVersion]:
