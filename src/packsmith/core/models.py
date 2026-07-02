@@ -8,7 +8,7 @@ from enum import IntEnum
 from operator import attrgetter
 from typing import Literal
 
-from pydantic import BaseModel, ConfigDict, Field, TypeAdapter
+from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator
 
 FUZZY_THRESHOLD = 0.80
 ERROR_NOT_IN_PACK = "Command must be ran in the modpack directory"
@@ -97,6 +97,13 @@ class Hit(BaseAPIModel):
     @property
     def normalized_slug(self) -> str:
         return _normalize(self.slug)
+
+    @field_validator("client_side", "server_side", mode="before")
+    @classmethod
+    def normalize_env(cls, v: str) -> str:
+        if v not in {"required", "optional", "unsupported"}:
+            return "unsupported"
+        return v
 
 
 class MatchResult(BaseModel):

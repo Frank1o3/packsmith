@@ -59,10 +59,10 @@ def build_pack_file(
         ):
             continue
 
-        if not client_side and package.client_side in {"required", "optional"}:
+        if not client_side and package.client_side != "unsupported":
             continue
 
-        if not server_side and package.server_side in {"required", "optional"}:
+        if not server_side and package.server_side != "unsupported":
             continue
 
         filename = (
@@ -127,11 +127,6 @@ def export_pack(
         zip_file.writestr("overrides/resourcepacks/", "")
         zip_file.writestr("overrides/shaderpacks/", "")
         zip_file.writestr("overrides/config/", "")
-
-        # Copy the files from the mods, resourcepacks,
-        # and shaderpacks directories into the zip file that are compatible
-        # we can use the data in pack.files,
-        # to determine which files to include in the zip file
 
         for file in pack.files:
             source_path = path / file.path
