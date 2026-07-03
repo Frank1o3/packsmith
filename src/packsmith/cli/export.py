@@ -59,10 +59,10 @@ def build_pack_file(
         ):
             continue
 
-        if not client_side and package.client_side != "unsupported":
+        if client_side and package.client_side == "unsupported":
             continue
 
-        if not server_side and package.server_side != "unsupported":
+        if server_side and package.server_side == "unsupported":
             continue
 
         filename = (
