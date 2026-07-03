@@ -95,9 +95,6 @@ def select_match(matched: MatchResults, console: Console) -> Hit:
     return matched.results[choice - 1].hit
 
 
-# In add.py
-
-
 def apply_add(
     info: Manifest,
     lock: LockFile,
