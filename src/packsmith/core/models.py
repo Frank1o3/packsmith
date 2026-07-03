@@ -107,7 +107,7 @@ class MatchResult(BaseModel):
 
 
 class MatchResults(BaseModel):
-    results: list[MatchResult] | None = Field(default_factory=list)
+    results: list[MatchResult] | None = None
 
     @property
     def best(self) -> MatchResult | None:
@@ -216,7 +216,7 @@ class ProjectVersion(BaseAPIModel):
 ProjectVersions = TypeAdapter(list[ProjectVersion])
 
 
-class Identifer(BaseAPIModel):
+class Identifier(BaseAPIModel):
     project_id: str
     name: str
 
@@ -226,9 +226,9 @@ class Manifest(BaseAPIModel):
     game_version: str
     loader: str
     loader_version: str
-    mods: list[Identifer] = Field(default_factory=list)
-    resourcepacks: list[Identifer] = Field(default_factory=list)
-    shaderpacks: list[Identifer] = Field(default_factory=list)
+    mods: list[Identifier] = Field(default_factory=list)
+    resourcepacks: list[Identifier] = Field(default_factory=list)
+    shaderpacks: list[Identifier] = Field(default_factory=list)
 
 
 class Env(BaseAPIModel):

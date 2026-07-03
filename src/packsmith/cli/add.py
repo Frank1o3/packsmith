@@ -16,7 +16,7 @@ from packsmith.core.models import (
     ERROR_NOT_IN_PACK,
     PROJECT_TYPE_TO_FIELD,
     Hit,
-    Identifer,
+    Identifier,
     LockFile,
     LockPackage,
     Manifest,
@@ -105,12 +105,12 @@ def apply_add(
         err = f"Unsupported project type: {hit.project_type}"
         raise ValueError(err)
 
-    # The manifest stores lists of Identifer objects, not strings
-    target_list: list[Identifer] = getattr(info, field_name)
+    # The manifest stores lists of Identifier objects, not strings
+    target_list: list[Identifier] = getattr(info, field_name)
 
     # Check if the mod is already in the list by project_id
     if not any(item.project_id == hit.project_id for item in target_list):
-        target_list.append(Identifer(name=hit.title, project_id=hit.project_id))
+        target_list.append(Identifier(name=hit.title, project_id=hit.project_id))
 
     if not has_package(lock, hit.project_id):
         lock.packages.append(
