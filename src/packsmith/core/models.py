@@ -13,11 +13,6 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, field_validator
 FUZZY_THRESHOLD = 0.80
 ERROR_NOT_IN_PACK = "Command must be ran in the modpack directory"
 _NORMALIZE_RE = re.compile(r"[^a-z]+")
-_STABILITY = {
-    "release": 3,
-    "beta": 2,
-    "alpha": 1,
-}
 
 
 class Stability(IntEnum):

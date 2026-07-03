@@ -2,7 +2,7 @@
 # SPDX-License-Identifier: MIT
 
 import asyncio
-from datetime import UTC, datetime, timedelta
+from datetime import timedelta
 
 from packsmith.api import ModrinthClient
 from packsmith.core.models import (
@@ -100,27 +100,47 @@ class Resolver:
 
     @staticmethod
     def _select_version(versions: list[ProjectVersion]) -> ProjectVersion | None:
-        if not versions:
-            return None
+        stability_window_days = 7
 
-        now = datetime.now(UTC)
-        cutoff = now - timedelta(days=90)
+        # Sort newest → oldest
+        versions_sorted = sorted(versions, key=lambda v: v.published, reverse=True)
 
-        stable_versions = [v for v in versions if v.stability >= Stability.BETA]
+        latest = versions_sorted[0]
+        window_start = latest.published - timedelta(days=stability_window_days)
 
-        if stable_versions:
-            best_stable = max(
-                stable_versions,
-                key=lambda v: (v.stability, v.published, v.downloads),
-            )
+        # --- Case 1: latest is RELEASE ---
+        if latest.stability == Stability.RELEASE:
+            return latest
 
-            if best_stable.published >= cutoff:
-                return best_stable
+        # --- Case 2: latest is BETA ---
+        if latest.stability == Stability.BETA:
+            return latest
 
-        return max(
-            versions,
-            key=lambda v: (v.stability, v.downloads, v.published),
-        )
+        # --- Case 3: latest is ALPHA ---
+        if latest.stability == Stability.ALPHA:
+            # Look for BETA in window
+            beta_candidates = [
+                v
+                for v in versions_sorted
+                if v.stability == Stability.BETA and v.published >= window_start
+            ]
+
+            if beta_candidates:
+                return max(beta_candidates, key=lambda v: v.published)
+
+            # Look for RELEASE in window
+            release_candidates = [
+                v
+                for v in versions_sorted
+                if v.stability == Stability.RELEASE and v.published >= window_start
+            ]
+
+            if release_candidates:
+                return max(release_candidates, key=lambda v: v.published)
+
+            return latest
+
+        return latest  # fallback safety
 
     # -------------------------
     # Conflict system

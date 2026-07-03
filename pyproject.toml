@@ -1,6 +1,6 @@
 [project]
 name = "packsmith"
-version = "0.1.7"
+version = "0.1.8"
 description = "A CLI based minecraft mod pack creator/manager"
 readme = "README.md"
 requires-python = ">=3.14,<3.15"
