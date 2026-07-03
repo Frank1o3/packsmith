@@ -114,7 +114,10 @@ async def _download_package(
         total=file.size or 0,
     )
 
-    async with semaphore, client.stream("GET", file.url) as response:
+    async with (
+        semaphore,
+        client.stream("GET", file.url, follow_redirects=True) as response,
+    ):
         response.raise_for_status()
         total = int(response.headers.get("Content-Length", file.size or 0))
         progress.update(task_id, total=total)
@@ -156,7 +159,8 @@ async def _download_all(
     timeout = httpx.Timeout(60.0, connect=15.0)
     semaphore = asyncio.Semaphore(5)
     async with httpx.AsyncClient(
-        headers={"User-Agent": user_agent}, timeout=timeout
+        headers={"User-Agent": user_agent, "Accept": "application/octet-stream"},
+        timeout=timeout,
     ) as client:
         with Progress(
             TextColumn("{task.fields[filename]}", justify="left"),
