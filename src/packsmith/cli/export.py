@@ -84,8 +84,9 @@ def build_pack_file(
             )
         )
 
+    tag = "-loader" if manifest.loader == "fabric" else ""
     pack.dependencies = {
-        f"{manifest.loader}-loader": manifest.loader_version,
+        f"{manifest.loader}{tag}": manifest.loader_version,
         "minecraft": manifest.game_version,
     }
 
