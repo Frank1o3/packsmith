@@ -40,14 +40,11 @@ def _get_export_path(package: LockPackage, path: Path) -> Path:
 
 
 def build_pack_file(
-    manifest: Manifest, lock: LockFile, *, client_side: bool, server_side: bool
+    manifest: Manifest,
+    lock: LockFile,
+    *,
+    side: Literal["client", "server", "both"],
 ) -> ModPack:
-    """Build a ModPackFile from the given manifest and lock file.
-
-    Returns:
-        A ModPackFile object representing the modpack.
-
-    """
     pack = ModPack(name=manifest.name)
 
     for package in lock.packages:
@@ -59,10 +56,15 @@ def build_pack_file(
         ):
             continue
 
-        if client_side and package.client_side == "unsupported":
+        if side == "client" and package.client_side == "unsupported":
             continue
-
-        if server_side and package.server_side == "unsupported":
+        if side == "server" and package.server_side == "unsupported":
+            continue
+        if (
+            side == "both"
+            and package.client_side == "unsupported"
+            and package.server_side == "unsupported"
+        ):
             continue
 
         filename = (
@@ -98,10 +100,6 @@ def export_pack(
     lock: LockFile,
     side: Literal["client", "server", "both"] = "both",
 ) -> None:
-    """Export a modpack archive for the requested side.
-
-    Exit: If the pack is not created in a valid project directory.
-    """
     path = Path.cwd()
 
     register_file = path / "meta.json"
@@ -109,12 +107,7 @@ def export_pack(
 
     pack_file.touch(exist_ok=True)
 
-    pack = build_pack_file(
-        manifest,
-        lock,
-        client_side=side in {"client", "both"},
-        server_side=side in {"server", "both"},
-    )
+    pack = build_pack_file(manifest, lock, side=side)
     pack_file.write_text(pack.model_dump_json(indent=2), encoding="UTF-8")
     tag = f"-{side}" if side != "both" else ""
     export_path = path / f"{manifest.name}{tag}.mrpack"
@@ -149,30 +142,20 @@ def export(
     *,
     client: bool = typer.Option(
         default=False,
-        help="Export a client-side modpack.",
+        help="Export a client-only modpack (excludes server-only packages).",
     ),
     server: bool = typer.Option(
         default=False,
-        help="Export a server-side modpack.",
+        help="Export a server-only modpack (excludes client-only packages).",
     ),
 ) -> None:
-    """Export a modpack for distribution.
-
-    Raises:
-        Exit: If no side flag is provided or the project is invalid.
-
-
-    """
     side: Literal["client", "server", "both"]
-    if client and server:
-        side = "both"
-    elif client:
+    if client and not server:
         side = "client"
-    elif server:
+    elif server and not client:
         side = "server"
     else:
-        console.print("[red]Error:[/red] Must specify either --client or --server.")
-        raise typer.Exit(code=1)
+        side = "both"
 
     path = Path.cwd()
     register_file = path / "meta.json"

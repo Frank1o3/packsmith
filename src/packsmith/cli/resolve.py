@@ -29,7 +29,7 @@ def save_lock(path: Path, lock: LockFile) -> None:
         tomli_w.dump(lock.model_dump(exclude_none=True), f)
 
 
-def resolve(
+def resolve(  # noqa: C901
     *,
     include_optional: bool = typer.Option(
         default=False,
@@ -87,6 +87,11 @@ def resolve(
     console.print(f"Resolved packages : {resolved}")
     console.print(f"Failed packages   : {failed}")
     console.print(f"Pending packages  : {pending}")
+
+    if resolver.warnings:
+        console.print("\n[bold yellow]Warnings:[/bold yellow]")
+        for warning in resolver.warnings:
+            console.print(f"  • {warning}")
 
     if failed > 0:
         console.print(

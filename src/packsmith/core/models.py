@@ -46,6 +46,46 @@ VersionType = Literal[
 ]
 State = Literal["pending", "resolved", "failed", "conflict"]
 
+EnvironmentValue = Literal[
+    "client_only",
+    "server_only",
+    "dedicated_server_only",
+    "client_and_server",
+    "server_only_client_optional",
+    "client_only_server_optional",
+    "client_or_server_prefers_both",
+    "client_or_server",
+    "singleplayer_only",
+    "unknown",
+]
+
+# Best-effort mapping from the new `environment` field (Modrinth API v2) down
+# to the legacy per-side required/optional/unsupported values that the rest
+# of packsmith (lockfile, .mrpack export) is built around.
+#
+# NOTE: server_only/singleplayer_only genuinely doesn't map cleanly - it
+# "works in singleplayer" (i.e. technically runs client-side too) but for
+# .mrpack purposes we treat it as server-required/client-unsupported since
+# that's the dedicated-server-focused case this tool cares about.
+ENVIRONMENT_TO_SIDES: dict[str, tuple[Environment, Environment]] = {
+    "client_only": ("required", "unsupported"),
+    "client_only_server_optional": ("required", "optional"),
+    "server_only": ("unsupported", "required"),
+    "dedicated_server_only": ("unsupported", "required"),
+    "server_only_client_optional": ("optional", "required"),
+    "client_and_server": ("required", "required"),
+    "client_or_server": ("optional", "optional"),
+    "client_or_server_prefers_both": ("optional", "optional"),
+    "singleplayer_only": ("required", "unsupported"),
+}
+
+
+def environment_to_sides(env: str | None) -> tuple[Environment, Environment]:
+    if env is None:
+        return ("unsupported", "unsupported")
+    return ENVIRONMENT_TO_SIDES.get(env, ("unsupported", "unsupported"))
+
+
 PROJECT_TYPE_TO_FIELD = {
     "mod": "mods",
     "resourcepack": "resourcepacks",
@@ -82,6 +122,10 @@ class Hit(BaseAPIModel):
 
     client_side: Environment = "unsupported"
     server_side: Environment = "unsupported"
+    # New (API v2) field. Only populated on GET /project - search hits don't
+    # have it yet. It's an aggregate across all versions, so prefer the
+    # per-version field on ProjectVersion when you have one.
+    environment: list[str] | None = None
 
     version_number: str | None = None
 
@@ -93,12 +137,28 @@ class Hit(BaseAPIModel):
     def normalized_slug(self) -> str:
         return _normalize(self.slug)
 
+    @property
+    def sides(self) -> tuple[Environment, Environment]:
+        if self.environment:
+            for value in self.environment:
+                resolved = environment_to_sides(value)
+                if resolved != ("unsupported", "unsupported"):
+                    return resolved
+        return self.client_side, self.server_side
+
     @field_validator("client_side", "server_side", mode="before")
     @classmethod
     def normalize_env(cls, v: str) -> str:
         if v not in {"required", "optional", "unsupported"}:
             return "unsupported"
         return v
+
+    @field_validator("environment", mode="before")
+    @classmethod
+    def normalize_environment(cls, v: object) -> list[str] | None:
+        if not isinstance(v, list):
+            return None
+        return [item for item in v if isinstance(item, str)]
 
 
 class MatchResult(BaseModel):
@@ -202,6 +262,9 @@ class ProjectVersion(BaseAPIModel):
     date_published: str
     downloads: int
     version_number: str | None = None
+    # New (API v2), one value per version - this is the field Modrinth
+    # recommends using over the project-level aggregate on Hit.
+    environment: str | None = None
 
     @property
     def stability(self) -> Stability:
@@ -211,6 +274,15 @@ class ProjectVersion(BaseAPIModel):
     def published(self) -> datetime:
         dt_str = self.date_published.replace("Z", "+00:00")
         return datetime.fromisoformat(dt_str)
+
+    @property
+    def sides(self) -> tuple[Environment, Environment] | None:
+        if self.environment is None:
+            return None
+        resolved = environment_to_sides(self.environment)
+        if resolved == ("unsupported", "unsupported"):
+            return None
+        return resolved
 
 
 ProjectVersions = TypeAdapter(list[ProjectVersion])
@@ -262,6 +334,8 @@ class LockPackage(BaseModel):
     server_side: Environment | None = None
     attempts: int = 0
     version_number: str | None = None
+    pinned_version_id: str | None = None
+    pinned_by: str | None = None
 
 
 class LockFile(BaseModel):

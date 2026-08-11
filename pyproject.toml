@@ -1,6 +1,6 @@
 [project]
 name = "packsmith"
-version = "0.1.9"
+version = "0.2.0"
 description = "A CLI based minecraft mod pack creator/manager"
 readme = "README.md"
 requires-python = ">=3.14,<3.15"
@@ -41,7 +41,7 @@ dev = [
     "pytest-cov>=7.1.0",
     "pytest-mock>=3.15.1",
     "ruff>=0.15.20",
-    "ty>=0.0.55",
+    "ty>=0.0.70",
 ]
 
 [project.scripts]
