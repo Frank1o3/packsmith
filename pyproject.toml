@@ -4,7 +4,7 @@
     name="packsmith"
     readme="README.md"
     requires-python=">=3.14,<3.15"
-    version="0.2.0"
+    version="0.2.1"
 
     dependencies=["httpx>=0.28.1", "pydantic>=2.13.4", "pyfiglet>=1.0.4", "tomli-w>=1.2.0", "typer>=0.26.8"]
 

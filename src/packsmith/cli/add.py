@@ -34,7 +34,10 @@ async def search(
     name: str, project_type: ProjectType, loader: str, game_version: str
 ) -> Search:
     client = ModrinthClient()
-    return await client.search(name, project_type, loader, game_version)
+    try:
+        return await client.search(name, project_type, loader, game_version)
+    finally:
+        await client.close()
 
 
 def load_lock(path: Path) -> LockFile:

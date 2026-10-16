@@ -123,7 +123,10 @@ def export_pack(
         zip_file.writestr("overrides/config/", "")
 
         for file in pack.files:
-            source_path = path / file.path
+            if file.path.startswith(("resourcepacks/", "shaderpacks/")):
+                source_path = path / "overrides" / file.path
+            else:
+                source_path = path / file.path
             if source_path.exists():
                 zip_file.write(source_path, arcname=file.path)
 

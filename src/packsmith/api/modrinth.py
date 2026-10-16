@@ -79,13 +79,13 @@ class ModrinthClient:
             [f"project_type:{project_type}"],
             [f"versions:{game_version}"],
         ]
+        if project_type == "mod":
+            facets.append([f"categories:{loader}"])
         params = {
             "query": name,
             "limit": 15,
             "facets": json.dumps(facets),
         }
-        if project_type == "mod":
-            facets.append([f"categories:{loader}"])
         return Search.model_validate(await self.get("/search", params=params))
 
     async def get_project(self, project_id: str) -> Hit:

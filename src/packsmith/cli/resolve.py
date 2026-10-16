@@ -45,11 +45,11 @@ def resolve(  # noqa: C901
         console.print(
             "[red]Error:[/red] Not inside a Packsmith project (meta.json not found)."
         )
-        typer.Exit(code=1)
+        raise typer.Exit(code=1)
 
     if not lock_file.exists():
         console.print("[red]Error:[/red] Missing lock file.")
-        typer.Exit(code=1)
+        raise typer.Exit(code=1)
 
     manifest = Manifest.model_validate_json(register_file.read_text("UTF-8"))
     lock = load_lock(lock_file)
@@ -60,17 +60,20 @@ def resolve(  # noqa: C901
         await asyncio.to_thread(save_lock, lock_file, lock)
 
     async def _run() -> None:
-        console.print("Resolving root packages...")
-        await resolver.first_layer(lock)
+        try:
+            console.print("Resolving root packages...")
+            await resolver.first_layer(lock)
 
-        console.print("Writing lock file...")
-        await _write_lock()
+            console.print("Writing lock file...")
+            await _write_lock()
 
-        console.print("Resolving dependency graph...")
-        await resolver.second_layer(lock)
+            console.print("Resolving dependency graph...")
+            await resolver.second_layer(lock)
 
-        console.print("Writing lock file...")
-        await _write_lock()
+            console.print("Writing lock file...")
+            await _write_lock()
+        finally:
+            await resolver.client.close()
 
     try:
         asyncio.run(_run())

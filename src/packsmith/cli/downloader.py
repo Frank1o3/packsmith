@@ -4,6 +4,8 @@
 import asyncio
 import hashlib
 import hmac
+import os
+import tempfile
 import tomllib
 from importlib.metadata import version
 from pathlib import Path
@@ -39,10 +41,8 @@ def load_lock(path: Path) -> LockFile:
 
 
 def _get_filename_from_url(url: str, *, fallback: str | None = None) -> str:
-    if fallback:
-        return fallback
-
-    name = Path(unquote(urlparse(url).path)).name
+    name = fallback or Path(unquote(urlparse(url).path)).name
+    name = Path(name).name
     if not name:
         name = unquote(url.rsplit("/", maxsplit=1)[-1])
     return name or "downloaded.file"
@@ -61,30 +61,25 @@ def _get_package_dir(
     return mods_dir
 
 
-def _validate_hashes(data: bytes, hashes: Hashes) -> bool:
-    if hashes.sha512:
-        actual_sha512 = hashlib.sha512(data).hexdigest()
-        if not hmac.compare_digest(actual_sha512, hashes.sha512):
-            return False
+def _validate_file_hashes(path: Path, hashes: Hashes) -> bool:
+    sha1 = hashlib.sha1() if hashes.sha1 else None
+    sha512 = hashlib.sha512() if hashes.sha512 else None
 
-    if hashes.sha1:
-        actual_sha1 = hashlib.new("sha1", data).hexdigest()
-        if not hmac.compare_digest(actual_sha1, hashes.sha1):
-            return False
+    with path.open("rb") as file:
+        while chunk := file.read(1024 * 1024):
+            if sha1:
+                sha1.update(chunk)
+            if sha512:
+                sha512.update(chunk)
 
-    return True
+    return not (
+        (sha512 and not hmac.compare_digest(sha512.hexdigest(), hashes.sha512))
+        or (sha1 and not hmac.compare_digest(sha1.hexdigest(), hashes.sha1))
+    )
 
 
 async def _ensure_dir(path: Path) -> None:
     await asyncio.to_thread(path.mkdir, parents=True, exist_ok=True)
-
-
-async def _read_file_bytes(path: Path) -> bytes:
-    return await asyncio.to_thread(path.read_bytes)
-
-
-async def _write_file_bytes(path: Path, data: bytes) -> None:
-    await asyncio.to_thread(path.write_bytes, data)
 
 
 async def _download_package(
@@ -104,8 +99,10 @@ async def _download_package(
     await _ensure_dir(target_dir)
 
     if target_path.exists():
-        existing_data = await _read_file_bytes(target_path)
-        if _validate_hashes(existing_data, file.hashes):
+        is_valid = await asyncio.to_thread(
+            _validate_file_hashes, target_path, file.hashes
+        )
+        if is_valid:
             return package, target_path, "already downloaded"
 
     task_id = progress.add_task(
@@ -114,29 +111,45 @@ async def _download_package(
         total=file.size or 0,
     )
 
-    async with (
-        semaphore,
-        client.stream("GET", file.url, follow_redirects=True) as response,
-    ):
-        response.raise_for_status()
-        total = int(response.headers.get("Content-Length", file.size or 0))
-        progress.update(task_id, total=total)
-        data = bytearray()
+    temp_file = tempfile.NamedTemporaryFile(
+        mode="wb",
+        dir=target_dir,
+        prefix=f".{filename}.",
+        suffix=".part",
+        delete=False,
+    )
+    temp_path = Path(temp_file.name)
+    sha1 = hashlib.sha1() if file.hashes.sha1 else None
+    sha512 = hashlib.sha512() if file.hashes.sha512 else None
+    try:
+        with temp_file:
+            async with (
+                semaphore,
+                client.stream("GET", file.url, follow_redirects=True) as response,
+            ):
+                response.raise_for_status()
+                total = int(response.headers.get("Content-Length", file.size or 0))
+                progress.update(task_id, total=total)
+                async for chunk in response.aiter_bytes(65536):
+                    if not chunk:
+                        continue
+                    temp_file.write(chunk)
+                    if sha1:
+                        sha1.update(chunk)
+                    if sha512:
+                        sha512.update(chunk)
+                    progress.update(task_id, advance=len(chunk))
 
-        async for chunk in response.aiter_bytes(65536):
-            if not chunk:
-                continue
-            data.extend(chunk)
-            progress.update(task_id, advance=len(chunk))
+        if (
+            sha512 and not hmac.compare_digest(sha512.hexdigest(), file.hashes.sha512)
+        ) or (sha1 and not hmac.compare_digest(sha1.hexdigest(), file.hashes.sha1)):
+            message = f"Hash mismatch for {package.project_id} ({filename})."
+            raise RuntimeError(message)
 
-    final_data = bytes(data)
-    await _write_file_bytes(target_path, final_data)
-    progress.update(task_id, completed=total)
-
-    if not _validate_hashes(final_data, file.hashes):
-        target_path.unlink(missing_ok=True)
-        message = f"Hash mismatch for {package.project_id} ({filename})."
-        raise RuntimeError(message)
+        os.replace(temp_path, target_path)
+        progress.update(task_id, completed=total)
+    finally:
+        temp_path.unlink(missing_ok=True)
 
     return package, target_path, None
 
